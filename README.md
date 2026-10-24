@@ -6,7 +6,7 @@ Assign IB course sections to a grid of classrooms and choose a common module ord
 
 ## 1. Problem
 
-An $N \times M$ grid represents the school's classrooms. There are six timetable **modules** (periods of the day):
+An N × M grid represents the school's classrooms. There are six timetable **modules** (periods of the day):
 
 | Module | Meaning |
 |---|---|
@@ -32,7 +32,7 @@ catalog = {
 
 A set of **students** (robots) is sampled; each has one letter per module, with the rule that a student's Module 6 letter differs from their Module 4 and Module 5 letters ("another subject").
 
-The school contains exactly $N \times M$ rooms, and **every room teaches exactly one course per module**. The decision is:
+The school contains exactly N × M rooms, and **every room teaches exactly one course per module**. The decision is:
 
 > For every room and every module, which course letter is taught there?
 > Plus: in which order do all students visit the six modules?
@@ -56,15 +56,14 @@ Every `(room, module)` slot holds exactly one letter. A course "appears" at ever
 
 For a single student `req` (a dict `module -> letter`), the shortest valid route is a 6-step dynamic program:
 
-$$
-dp_1(p) = 0 \quad \text{for every room } p \text{ teaching } \mathrm{req}[\mathrm{order}_1]
-$$
+```text
+dp_1(p)     = 0                                   for every room p teaching req[order_1]
 
-$$
-dp_{i+1}(q) = \min_{p \,:\, dp_i(p) < \infty} \bigl( dp_i(p) + d_1(p,q) \bigr) \quad \text{for every room } q \text{ teaching } \mathrm{req}[\mathrm{order}_{i+1}]
-$$
+dp_{i+1}(q) = min over p with dp_i(p) < inf of
+              ( dp_i(p) + d1(p, q) )              for every room q teaching req[order_{i+1}]
+```
 
-where $d_1$ is Manhattan distance. The student's cost is $\min_p dp_6(p)$; the objective is the mean over students.
+where `d1` is Manhattan distance. The student's cost is `min over p of dp_6(p)`; the objective is the mean over students.
 
 This DP handles the "several rooms teach the same course" case for free: the student just uses whichever section is cheapest at each step.
 
@@ -72,10 +71,9 @@ This DP handles the "several rooms teach the same course" case for free: the stu
 
 A placement is **feasible** iff every course letter that any student needs appears in **at least one** room for that module:
 
-$$
-\{ \mathrm{req}[m] : \text{student} \} \subseteq \{ \mathrm{placement}[p][m] : p \in \text{grid} \}
-\quad \text{for every module } m.
-$$
+```text
+{ req[m] : student }  ⊆  { placement[p][m] : p in grid }     for every module m
+```
 
 This is the only hard constraint. There are no capacity limits in the current model.
 
@@ -96,13 +94,13 @@ Constructs an applied instance. Returns:
 - `catalog`: the per-module letter set.
 - `robots`: `num_students` sampled schedules, respecting the "Module 6 must differ" rule.
 
-The current grid is $6\times 6$ and $12$ students by default.
+The current grid is 6 × 6 and 12 students by default.
 
 ### 3.2 Cost and feasibility helpers
 
 | Function | Purpose |
 |---|---|
-| `manhattan(p, q)` | $L_1$ distance between two grid cells. |
+| `manhattan(p, q)` | L1 distance between two grid cells. |
 | `positions_of(placement, module, letter)` | All rooms teaching `letter` in `module`. |
 | `robot_cost(req, order, placement)` | The 6-step DP above; returns `inf` if the student cannot complete the route. |
 | `average_cost(robots, order, placement)` | Mean of `robot_cost` over all students — the objective. |
@@ -121,7 +119,7 @@ Produces a feasible random placement. This is the only initialization; it does n
 
 For a fixed category order, repeatedly sweep the grid and try to improve each cell:
 
-```
+```text
 for each sweep:
     shuffle positions
     for each position p:
@@ -138,7 +136,7 @@ Notes:
 
 - The move set is **single-cell substitution**, not a swap. Because the grid is fully filled, a swap is just two substitutions, and the acceptance check is cheaper this way.
 - Feasibility (`covers`) is re-checked after each candidate letter; infeasible candidates are rejected immediately without computing the cost.
-- Cost is recomputed from scratch on every candidate. This is fine at $6\times 6 \times 6 \times 12$ but is the first thing to cache if you scale up.
+- Cost is recomputed from scratch on every candidate. This is fine at 6 × 6 × 6 × 12 but is the first thing to cache if you scale up.
 - `sweeps` is an upper bound; the loop breaks as soon as a sweep makes no improvement, so it usually stops earlier.
 
 **Role:** takes the raw random fill and turns it into a local optimum under single-cell moves. It is the analogue of gradient descent in the discrete space.
@@ -149,21 +147,18 @@ Same single-cell move set as coordinate descent, but with temperature-based acce
 
 - **70% of iterations:** pick a random cell and a random module, replace its letter with a uniformly random different letter from the catalog. If feasibility breaks, revert. Otherwise accept by the Metropolis rule:
 
-$$
-\Pr[\text{accept}] =
-\begin{cases}
-1 & \Delta \le 0 \\
-\exp(-\Delta / T) & \Delta > 0
-\end{cases}
-$$
+```text
+Pr[accept] = 1                if Δ <= 0
+           = exp(-Δ / T)      if Δ > 0
+```
 
 - **30% of iterations:** swap two positions in the current category order, and re-evaluate. Accepted by the same rule. This lets the solver **co-optimize the order** alongside the placement instead of treating it as fixed.
 
 Temperature schedule is geometric:
 
-$$
-T(\text{it}) = T_0 \left( \frac{T_1}{T_0} \right)^{\text{it}/(\text{iters}-1)}.
-$$
+```text
+T(it) = T0 * (T1 / T0)^( it / (iters - 1) )
+```
 
 The best-ever `(placement, order, cost)` triple is saved separately from the current state, so the return value is the best solution found, not just the final state.
 
@@ -173,7 +168,7 @@ The best-ever `(placement, order, cost)` triple is saved separately from the cur
 
 For each of `n_orders` randomly chosen category orders:
 
-```
+```text
 placement = random_fill(...)                  # initial
 placement, c1 = coordinate_descent(...)       # discrete local search
 placement, order, c = anneal(...)             # SA, may change order
@@ -182,7 +177,7 @@ keep the best (cost, order, placement) across orders
 
 The returned tuple is `(best_cost, best_order, best_placement)`.
 
-**Why multiple orders?** There are $6! = 720$ possible category orders, and the objective is not separable across them. Trying a few random orders gives most of the benefit of the full enumeration at a small fraction of the cost; on the default $6\times 6$ instance, `n_orders=3` runs in well under a second.
+**Why multiple orders?** There are 6! = 720 possible category orders, and the objective is not separable across them. Trying a few random orders gives most of the benefit of the full enumeration at a small fraction of the cost; on the default 6 × 6 instance, `n_orders=3` runs in well under a second.
 
 ---
 
@@ -248,9 +243,9 @@ fig.savefig("solution.png", dpi=150)
 
 ### File layout
 
-```
+```text
 main_filled.py            # instance builder, cost, feasibility, coordinate descent, SA, driver
-visualize_filled.py  # 4-panel solution view, comparison view, GIF animation
+visualize_filled.py       # 4-panel solution view, comparison view, GIF animation
 ```
 
 `main_filled.py` imports `visualize_filled`, so run from a directory where both files are visible.
@@ -281,7 +276,7 @@ If a real school needs any of these, they must be added as **hard constraints**;
 
 - **No room capacity.** A course can be placed in exactly one room regardless of class size.
 - **No teacher constraints.** Nothing prevents "the same teacher teaches two courses in two rooms at the same time."
-- **Feasibility is checked from scratch** in every move of coordinate descent and SA. This is fine for a toy instance and becomes the bottleneck around $20\times 20$ grids.
+- **Feasibility is checked from scratch** in every move of coordinate descent and SA. This is fine for a toy instance and becomes the bottleneck around 20 × 20 grids.
 - **The cost is recomputed from scratch per move.** Caching per-student cost and updating only affected students after a single-cell change would be the first optimization for a real instance.
 - **Manhattan distance is a proxy.** It ignores corridors, stairs, entrances, and terrain. For a real building, replace `manhattan` with a precomputed shortest-path matrix on the building graph; the DP is unchanged.
 - **The category order is shared by all students.** Real schools may permit parallel electives or free periods; the current model forces one common order.
@@ -296,4 +291,3 @@ The discrete objective is piecewise constant in `placement` and `order`, so grad
 2. On this instance, **coordinate descent + SA from a random fill** matched the relaxed pipeline's final cost within noise, in a fraction of the code.
 
 The current pipeline is the shortest one that consistently reaches a good local minimum on the toy instance.
-
